@@ -20,10 +20,9 @@ pub use npc::*;
 pub mod map;
 pub use map::*;
 
+pub mod cons;
+pub use cons::*;
 
-pub const MAP_HIGH_Z: f32 = 6.0;
-pub const MAP_MID_Z: f32 = 5.0;
-pub const MAP_LOW_Z: f32 = 4.0;
 
 pub struct GamePlugin;
 impl Plugin for GamePlugin {

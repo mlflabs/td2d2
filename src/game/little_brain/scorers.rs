@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::{LittleBrain, LittleScorerTag};
+use super::{LittleBrain, LittleScorerTag, WANDER_ID, REST_ID};
 use std::{any::TypeId, default};
 
 
@@ -85,7 +85,7 @@ pub fn score_management_system(
 
 
 
-pub const WANDER_ID: u32 = 100;
+
 #[derive(Component, Reflect, Default, Debug)]
 pub struct WanderScorer(f32);
 
@@ -122,7 +122,7 @@ pub fn wander_scorer_system(
 
 
 
-pub const REST_ID: u32 = 110;
+
 #[derive(Component, Reflect, Default, Debug)]
 pub struct RestScorerTag;
 

@@ -32,6 +32,11 @@ impl LittleBrain {
         self
     }
 
+    pub fn start(&mut self) -> &LittleBrain {
+        self.state = ActionState::Running;
+        self
+    }
+
     pub fn finish(&mut self) -> &LittleBrain {
         self.state = ActionState::Cleanup;
         self

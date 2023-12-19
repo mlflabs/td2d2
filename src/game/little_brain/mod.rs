@@ -1,8 +1,6 @@
-use bevy::{prelude::*, utils::HashMap, ecs::storage::SparseSet};
+use bevy::{prelude::*, utils::HashMap};
 
-use bevy::ecs::component::SparseStorage;
-use bevy_xpbd_2d::parry::utils::hashmap;
-use std::any::TypeId;
+
 
 pub mod actions;
 pub use actions::*;
@@ -10,7 +8,14 @@ pub use actions::*;
 pub mod scorers;
 pub use scorers::*;
 
-use super::{Player, MAP_LOW_Z};
+
+pub mod move_to_destination;
+pub use move_to_destination::*;
+
+pub mod find_random_location;
+pub use find_random_location::*;
+
+use super::{Player, MAP_LOW_Z, WANDER_ID, GET_RANDOM_LOCATION, REST_ID, MOVE_TO_DES};
 
 
 
@@ -33,6 +38,8 @@ impl Plugin for LittleBrainPlugin {
         app
             .register_type::<LittleBrain>()
             .register_type::<Score>()
+            .register_type::<SpeedProp>()
+            .register_type::<Destination>()
             .add_systems(PreUpdate,(
                 score_management_system,
                 action_management_system
@@ -41,6 +48,8 @@ impl Plugin for LittleBrainPlugin {
                 wander_action_system,
                 rest_action_system,
 
+                move_to_destination_action_system,
+                random_location_action_system,
                 wander_scorer_system,
                 rest_scorer_system,
                 //test_system
@@ -53,7 +62,8 @@ impl Plugin for LittleBrainPlugin {
             .scorer(
                 WANDER_ID,
                 vec![
-                    WANDER_ID
+                    GET_RANDOM_LOCATION,
+                    MOVE_TO_DES
                 ])
             .scorer(REST_ID, vec![
                 REST_ID
@@ -90,6 +100,8 @@ pub fn spawn_npc(
         LittleScorerTag,
         WanderScorer::default(),
         RestScorerTag,
+        SpeedProp::default(),
+        Destination::default(),
         Name::new("GreenNpc"),
         SpriteBundle {
             transform: Transform::from_xyz(2000.0, 1000.0, MAP_LOW_Z),
@@ -129,6 +141,9 @@ pub fn action_management_system(
                     REST_ID => {
                         cmd.entity(e).insert(RestAction);
                     },
+                    GET_RANDOM_LOCATION => {
+                        cmd.entity(e).insert(FindRandomLocationAction);
+                    },
                     _ => {}
                 }
 
@@ -152,6 +167,9 @@ pub fn action_management_system(
                     },
                     REST_ID => {
                         cmd.entity(e).remove::<RestAction>();
+                    },
+                    GET_RANDOM_LOCATION => {
+                        cmd.entity(e).remove::<FindRandomLocationAction>();
                     },
                     _ => {}
                 }
