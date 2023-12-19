@@ -1,76 +1,96 @@
 use bevy::prelude::*;
 
-use super::LittleBrain;
-
-
-#[derive(Component, Reflect, Default, Debug)]
-pub struct RestAction;
+use super::{Score, LittleScorerTag, LittleBrainData};
 
 
 
-#[derive(Component, Default, Debug)]
+
+
+
+
+
+
+#[derive(Component, Default, Debug, Reflect)]
 pub enum ActionState {
-    #[default] Init, Running, Cleanup, Finished
+    #[default] PreInit, InitBuffer, Init, Running, Cleanup, CleanupBuffer, Canceled, Finished
 }
-
-#[derive(Component, Default, Debug)]
-pub struct Action {
-    pub state: ActionState
-
-}
-
 
 
 #[derive(Component, Reflect, Default, Debug)]
+pub struct LittleBrain {
+    pub state: ActionState,
+    pub action: u32,
+    pub step: usize,
+    pub canceled: bool,
+}
+
+impl LittleBrain {
+    pub fn reset(&mut self) -> &LittleBrain {
+        self.state = ActionState::PreInit;
+        self.step = 0;
+        self.canceled = false;
+        self
+    }
+
+    pub fn finish(&mut self) -> &LittleBrain {
+        self.state = ActionState::Cleanup;
+        self
+    }
+
+    pub fn cancel(&mut self) -> &LittleBrain {
+        self.state = ActionState::Cleanup;
+        self.canceled = true;
+        self
+    }
+}
+
+
+#[derive(Component, Reflect, Default, Debug)]
+#[component(storage = "SparseSet")]
 pub struct WanderAction;
 
 
 pub fn wander_action_system(
-    cmd: &mut Commands,
-    mut actions: Query<(Entity, &mut Action), (With<WanderAction>, With<LittleBrain>)>
+    mut actions: Query<&mut LittleBrain, With<WanderAction>>
 ){
-    for (e, mut action) in actions.iter_mut() {
-        action.state = match action.state {
+    for mut action in actions.iter_mut() {
+        match action.state {
             ActionState::Init => {
-                println!("Wander, Initial");
-                ActionState::Running
+                //println!("*************Wander, Initial");
             },
             ActionState::Running => {
-                ActionState::Cleanup
+                //println!("Running Wander, Running");
+                action.finish();
             },
-            ActionState::Cleanup => {
-                cmd.entity(e).remove::<WanderAction>();
-
-
-                ActionState::Finished
-            },
-            ActionState::Finished => ActionState::Finished
+           
+            _ => {}
         };
     }
 }
 
 
+
+#[derive(Component, Reflect, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct RestAction;
+
+
+
+
+
 pub fn rest_action_system(
-    cmd: &mut Commands,
-    mut actions: Query<(Entity, &mut Action), (With<RestAction>, With<LittleBrain>)>
+    mut actions: Query<&mut LittleBrain, With<RestAction>>
 ){
-    for (e, mut action) in actions.iter_mut() {
-        action.state = match action.state {
+    for mut action in actions.iter_mut() {
+        match action.state {
             ActionState::Init => {
-                println!("Rest, Initial");
-                ActionState::Running
+                //println!("Rest, Initial");
             },
             ActionState::Running => {
-                ActionState::Cleanup
+                //println!("Resting........................");
+                action.finish();
             },
-            ActionState::Cleanup => {
-                cmd.entity(e).remove::<RestAction>();
-                ActionState::Finished
-            },
-            _ => {
-                println!("Found not support option");
-                ActionState::Finished
-            }
+            _ => {}
         };
     }
 }

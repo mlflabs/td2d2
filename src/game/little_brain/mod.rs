@@ -1,6 +1,7 @@
 use bevy::{prelude::*, utils::HashMap, ecs::storage::SparseSet};
 
-use bevy::ecs::component::TableStorage;
+use bevy::ecs::component::SparseStorage;
+use bevy_xpbd_2d::parry::utils::hashmap;
 use std::any::TypeId;
 
 pub mod actions;
@@ -12,8 +13,7 @@ pub use scorers::*;
 use super::{Player, MAP_LOW_Z};
 
 
-#[derive(Component, Reflect, Default, Debug)]
-pub struct LittleBrain;
+
 
 
 #[derive(Component, Reflect, Default, Debug)]
@@ -30,17 +30,35 @@ impl Plugin for LittleBrainPlugin {
        
         
 
-        app.add_systems(PreUpdate,(
-            score_management_system,
-        ));
-        app.add_systems(Update,(
-            wander_scorer_system,
-            rest_scorer_system,
-            //test_system
-        ));
+        app
+            .register_type::<LittleBrain>()
+            .register_type::<Score>()
+            .add_systems(PreUpdate,(
+                score_management_system,
+                action_management_system
+            ))
+            .add_systems(Update,(
+                wander_action_system,
+                rest_action_system,
+
+                wander_scorer_system,
+                rest_scorer_system,
+                //test_system
+            ))
+            .add_systems(Startup, (
+                spawn_npc,
+            ));
 
         LittleBrainBuilder::new()
-            .scorer::<Test5>()
+            .scorer(
+                WANDER_ID,
+                vec![
+                    WANDER_ID
+                ])
+            .scorer(REST_ID, vec![
+                REST_ID
+            ])
+            //.scorer::<RestScorerTag>(REST_ID)
             .configure(app);
         // let mut services: HashMap<String, Box<dyn MyTrait>> = HashMap::new();
         // services.insert("abhi".to_string(), Box::new(Bar));
@@ -67,14 +85,16 @@ pub fn spawn_npc(
 ) {
 
     commands.spawn((
-        LittleBrain,
-        WanderScorerTag,
+        LittleBrain::default(),
+        Score::default(),
+        LittleScorerTag,
+        WanderScorer::default(),
         RestScorerTag,
-        Name::new("WaterSource"),
+        Name::new("GreenNpc"),
         SpriteBundle {
-            transform: Transform::from_xyz(4000.0, 2000.0, MAP_LOW_Z),
+            transform: Transform::from_xyz(2000.0, 1000.0, MAP_LOW_Z),
             sprite: Sprite {
-                color: Color::rgb(0., 0.47, 1.),
+                color: Color::GREEN,
                 custom_size: Some(Vec2::new(100., 100.)),
                 ..default()
             },
@@ -86,14 +106,107 @@ pub fn spawn_npc(
 }
 
 
-#[derive(Resource)]
-pub struct Data {
-    pub scorers: HashMap<TypeId, Box<dyn Component<Storage=TableStorage>>>,
+
+
+pub fn action_management_system(
+    mut cmd: Commands,
+    data_res: Res<LittleBrainData>,
+    mut query: Query<(Entity, &mut LittleBrain, &Score), Without<LittleScorerTag>>,    
+){
+    for (e, mut brain, score) in query.iter_mut(){
+        
+        match brain.state {
+            ActionState::PreInit => {
+                //println!("Action State:::::::::::: {:?}", brain.state);
+                //brain.reset();
+                //brain.action = score.scorer;
+                //let comp = data_res.as_ref().scorers[&score.scorer].;
+                brain.action = data_res.scorers[&score.scorer][brain.step];
+                match brain.action {
+                    WANDER_ID => {
+                        cmd.entity(e).insert(WanderAction);
+                    },
+                    REST_ID => {
+                        cmd.entity(e).insert(RestAction);
+                    },
+                    _ => {}
+                }
+
+                brain.state = ActionState::Init;   
+            },
+            ActionState::InitBuffer => {
+                //println!("Action State:::::::::::: {:?}", brain.state);
+                brain.state = ActionState::Init;
+            }
+            ActionState::Init => {
+                //println!("Action State:::::::::::: {:?}", brain.state);
+                brain.state = ActionState::Running;
+            },
+
+            ActionState::Cleanup => {
+                //println!("Action State:::::::::::: {:?}", brain.state);
+                brain.state = ActionState::Finished;
+                match brain.action {
+                    WANDER_ID => {
+                        cmd.entity(e).remove::<WanderAction>();
+                    },
+                    REST_ID => {
+                        cmd.entity(e).remove::<RestAction>();
+                    },
+                    _ => {}
+                }
+                if brain.canceled {
+                    brain.state = ActionState::Finished;
+                    return
+                }
+                let data = data_res.as_ref();
+                if data.scorers[&score.scorer].len() > brain.step + 1 {
+                    brain.step += 1;
+                    brain.state = ActionState::PreInit;
+                }
+                else {
+                    brain.state = ActionState::Finished;
+                    
+                }
+            }      
+
+
+            ActionState::Finished => {
+                brain.reset();
+                cmd.entity(e).insert(LittleScorerTag);
+                //let data = data_res.as_ref();
+                // let comp = data.scorers[&score.scorer][brain.step].as_ref();
+                // cmd.entity(e).remove(comp);  
+            }
+            _ => {}
+        }
+    }
 }
 
-impl Data {
-    pub fn new(scorers: HashMap<TypeId, Box<dyn Component<Storage=TableStorage>>>) -> Data {
-        return Data { scorers };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#[derive(Resource)]
+pub struct LittleBrainData {
+    //pub scorers: HashMap<u32, Vec<Box<dyn Component<Storage=SparseStorage>>>>,
+    pub scorers: HashMap<u32, Vec<u32>>,
+}
+
+impl LittleBrainData {
+    pub fn new(scorers: HashMap<u32, Vec<u32>>) -> LittleBrainData {
+        return LittleBrainData { scorers };
     }
 }
 
@@ -103,7 +216,7 @@ impl Data {
 
 
 pub struct LittleBrainBuilder {
-    pub scorers: HashMap<TypeId, Box<dyn Component<Storage=TableStorage>>>,
+    pub scorers: HashMap<u32, Vec<u32>>,
 }
 
 impl LittleBrainBuilder {
@@ -113,18 +226,22 @@ impl LittleBrainBuilder {
             scorers: HashMap::new(),
         }
     }
-
-    pub fn scorer<T: Default + Component<Storage = TableStorage>>(mut self) -> LittleBrainBuilder{
-        self.scorers.insert(TypeId::of::<T>(), Box::new(T::default()));
+    //<T: Default + Component<Storage = TableStorage>>
+    pub fn scorer(mut self, id: u32, actions: Vec<u32>) -> LittleBrainBuilder{
+        if self.scorers.contains_key(&id) {
+            error!("Duplicate scorerId {:?}", id);
+        }
+        else {
+            self.scorers.insert(id, actions);
+        }
+        
         self
     }
 
     pub fn configure(mut self, app: &mut App){
-        app.insert_resource( Data::new(self.scorers) );
+        app.insert_resource( LittleBrainData::new(self.scorers) );
     }
 }
-
-
 
 
 
